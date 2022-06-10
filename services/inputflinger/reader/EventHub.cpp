@@ -1227,11 +1227,12 @@ const std::shared_ptr<KeyCharacterMap> EventHub::getKeyCharacterMap(int32_t devi
 bool EventHub::setKeyboardLayoutOverlay(int32_t deviceId, std::shared_ptr<KeyCharacterMap> map) {
     std::scoped_lock _l(mLock);
     Device* device = getDeviceLocked(deviceId);
-    if (device == nullptr || map == nullptr || device->keyMap.keyCharacterMap == nullptr) {
-        return false;
+    if (device != nullptr && map != nullptr && device->keyMap.keyCharacterMap != nullptr) {
+        device->keyMap.keyCharacterMap->combine(*map);
+        device->keyMap.keyCharacterMapFile = device->keyMap.keyCharacterMap->getLoadFileName();
+        return true;
     }
-    device->keyMap.keyCharacterMap->combine(*map);
-    return true;
+    return false;
 }
 
 static std::string generateDescriptor(InputDeviceIdentifier& identifier) {
@@ -2055,7 +2056,13 @@ void EventHub::openDeviceLocked(const std::string& devicePath) {
 
     // Check whether this device is an accelerometer.
     if (device->propBitmask.test(INPUT_PROP_ACCELEROMETER)) {
-        device->classes |= InputDeviceClass::SENSOR;
+        bool hasAxis = false;
+        for (int i = 0; i <= ABS_MAX; i++) {
+            if (device->absBitmask.test(i)) hasAxis = true;
+        }
+        if(hasAxis) {
+            device->classes |= InputDeviceClass::SENSOR;
+        }
     }
 
     // Check whether this device has switches.
